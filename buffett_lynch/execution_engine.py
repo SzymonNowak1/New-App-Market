@@ -51,9 +51,10 @@ class ExecutionEngine:
             return orders
 
         sorted_picks = [p for p in sorted(picks, key=lambda p: p.total, reverse=True) if p.symbol in top100]
-        top15 = sorted_picks[:15]
-        top40 = sorted_picks[:40]
-        top40_symbols = {p.symbol for p in top40}
+        top_n = self.cfg.top_n
+        top_buy = sorted_picks[:top_n]
+        top_hold = sorted_picks[: 3 * top_n]
+        top_hold_symbols = {p.symbol for p in top_hold}
         pick_map = {p.symbol: p for p in sorted_picks}
 
         for pos in list(portfolio.values()):
@@ -69,15 +70,15 @@ class ExecutionEngine:
                 orders.append(Order(pos.symbol, "SELL", pos.quantity, pos.currency, reason="ValueScore guardrail"))
                 continue
 
-            if pos.symbol not in top40_symbols:
-                orders.append(Order(pos.symbol, "SELL", pos.quantity, pos.currency, reason="Below TOP40 buffer"))
+            if pos.symbol not in top_hold_symbols:
+                orders.append(Order(pos.symbol, "SELL", pos.quantity, pos.currency, reason="Below TOP3N buffer"))
                 continue
 
             if sma_value is not None and price < sma_value:
                 orders.append(Order(pos.symbol, "SELL", pos.quantity, pos.currency, reason="Price below SMA200"))
 
         if rebalance_due:
-            for pick in top15:
+            for pick in top_buy:
                 sma_value = sma_map.get(pick.symbol, {}).get(date)
                 price = price_map.get(pick.symbol)
                 if price is None or sma_value is None:

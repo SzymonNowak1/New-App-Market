@@ -23,6 +23,7 @@ class ScoredCompany:
     quality: float
     value: float
     growth: float
+    moat: float
     risk: float
     total: float
     sector: str

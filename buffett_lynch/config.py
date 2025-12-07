@@ -8,7 +8,7 @@ class RebalancingConfig:
     frequency: str = "quarterly"
     min_position: float = 0.02
     max_position: float = 0.25
-    max_sector_weight: float = 0.30
+    max_sector_weight: float = 0.35
     # Added to keep SMA lookback available even if rebalancing config is referenced directly.
     sma_lookback: int = 200
 

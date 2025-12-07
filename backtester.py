@@ -51,7 +51,20 @@ def _fundamentals(symbols: List[str], start_year: int, end_year: int) -> Dict[st
         pe = float(info.get("trailingPE") or 18.0)
         growth = float(info.get("revenueGrowth") or 0.08) * 100
         volatility = float(info.get("beta") or 1.1) * 20
-        metrics = {"roe": roe, "pe": pe, "growth": growth, "volatility": volatility}
+        gross_margin_pct = float(info.get("grossMargins") or 0.40) * 100
+        rd_sales_pct = float(info.get("researchDevelopment") or 0.08) * 100
+        roic_trend_pct = float(info.get("returnOnEquity") or 0.10) * 10
+        revenue_volatility_penalty = max(0.0, volatility * 0.2)
+        metrics = {
+            "roe": roe,
+            "pe": pe,
+            "growth": growth,
+            "volatility": volatility,
+            "gross_margin_pct": gross_margin_pct,
+            "rd_sales_pct": rd_sales_pct,
+            "roic_trend_pct": roic_trend_pct,
+            "revenue_volatility_penalty": revenue_volatility_penalty,
+        }
         for year in range(start_year, end_year + 1):
             fundamentals.setdefault(symbol, []).append(
                 FundamentalSnapshot(period=str(year), market_cap=market_cap, sector=sector, metrics=metrics)
@@ -85,9 +98,14 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
     }
 
     rules = ScoringRules(
-        quality=lambda snap: snap.metrics.get("roe", 0),
+        quality=lambda snap: 0.9 * snap.metrics.get("roe", 0) + 0.1 * snap.metrics.get("roic_trend_pct", 0),
         value=lambda snap: max(0.0, 100.0 - snap.metrics.get("pe", 0)),
-        growth=lambda snap: snap.metrics.get("growth", 0),
+        growth=lambda snap: max(
+            0.0, snap.metrics.get("growth", 0) - snap.metrics.get("revenue_volatility_penalty", 0)
+        ),
+        moat=lambda snap: 0.4 * snap.metrics.get("gross_margin_pct", 0)
+        + 0.3 * snap.metrics.get("rd_sales_pct", 0)
+        + 0.3 * snap.metrics.get("roic_trend_pct", 0),
         risk=lambda snap: max(0.0, 100.0 - snap.metrics.get("volatility", 0)),
     )
 

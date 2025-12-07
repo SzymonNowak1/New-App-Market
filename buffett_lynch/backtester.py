@@ -217,7 +217,7 @@ class Backtester:
 
     def _allow_sell(self, order: Order, holdings: Dict[str, Position], date: str) -> bool:
         """Enforce a 90-day minimum holding period for non-fundamental exits."""
-        fundamental_reasons = {"Bear regime", "Lost TOP100", "ValueScore guardrail", "Below TOP40 buffer"}
+        fundamental_reasons = {"Bear regime", "Lost TOP100", "ValueScore guardrail", "Below TOP3N buffer"}
         if order.reason in fundamental_reasons:
             return True
         pos = holdings.get(order.symbol)
