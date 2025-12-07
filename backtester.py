@@ -28,6 +28,7 @@ def _price_series(symbol: str, start_date: str, end_date: str) -> List[PriceBar]
         prices = pd.Series(np.linspace(100, 120, len(dates)), index=dates)
     else:
         prices = df["Close"]
+    return [PriceBar(pd.to_datetime(date).strftime("%Y-%m-%d"), float(price)) for date, price in prices.items()]
     return [PriceBar(date.strftime("%Y-%m-%d"), float(price)) for date, price in prices.items()]
 
 
