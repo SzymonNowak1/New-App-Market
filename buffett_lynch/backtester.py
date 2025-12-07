@@ -42,6 +42,10 @@ class Backtester:
         self.execution = execution
         self.currency = currency
         self.config = config
+        # Guarantee an SMA lookback attribute on the rebalancing configuration so downstream
+        # consumers never fail when older objects lack the field (e.g., during CI runs).
+        if not hasattr(self.portfolio_manager.rebalance_cfg, "sma_lookback"):
+            self.portfolio_manager.rebalance_cfg.sma_lookback = self.execution.cfg.sma_lookback
 
     def run(
         self,
@@ -52,9 +56,13 @@ class Backtester:
         fx_history: Dict[str, List[PriceBar]],
     ) -> BacktestReport:
         regime_map = self.execution.bull_bear(spy_prices)
+        lookback = getattr(
+            self.portfolio_manager.rebalance_cfg,
+            "sma_lookback",
+            self.execution.cfg.sma_lookback,
+        )
         sma_cache: Dict[str, Dict[str, float]] = {
-            symbol: sma(prices, self.portfolio_manager.rebalance_cfg.sma_lookback)
-            for symbol, prices in price_history.items()
+            symbol: sma(prices, lookback) for symbol, prices in price_history.items()
         }
         price_lookup: Dict[str, Dict[str, float]] = {
             symbol: {bar.date: bar.close for bar in prices} for symbol, prices in price_history.items()
