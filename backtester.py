@@ -28,6 +28,17 @@ def _price_series(symbol: str, start_date: str, end_date: str) -> List[PriceBar]
         prices = pd.Series(np.linspace(100, 120, len(dates)), index=dates)
     else:
         prices = df["Close"]
+
+    # yfinance can return a DataFrame for `Close` when column indices carry ticker labels;
+    # convert to a single Series before iterating to avoid interpreting ticker names as dates.
+    if isinstance(prices, pd.DataFrame):
+        if prices.shape[1] == 1:
+            prices = prices.iloc[:, 0]
+        else:
+            col = symbol if symbol in prices.columns else prices.columns[0]
+            prices = prices[col]
+
+    return [PriceBar(pd.to_datetime(date).strftime("%Y-%m-%d"), float(price)) for date, price in prices.items()]
     return [PriceBar(pd.to_datetime(date).strftime("%Y-%m-%d"), float(price)) for date, price in prices.items()]
     return [PriceBar(date.strftime("%Y-%m-%d"), float(price)) for date, price in prices.items()]
 
