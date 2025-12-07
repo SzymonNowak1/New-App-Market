@@ -24,6 +24,7 @@ class BacktestConfig:
     start_date: str = "2000-01-01"
     end_date: str = "2025-12-31"
     base_currency: str = "PLN"
+    initial_capital: float = 100000.0
     contributions: Dict[str, float] = field(default_factory=dict)  # date -> amount
 
 

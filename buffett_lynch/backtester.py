@@ -56,6 +56,9 @@ class Backtester:
             symbol: sma(prices, self.portfolio_manager.rebalance_cfg.sma_lookback)
             for symbol, prices in price_history.items()
         }
+        price_lookup: Dict[str, Dict[str, float]] = {
+            symbol: {bar.date: bar.close for bar in prices} for symbol, prices in price_history.items()
+        }
         equity_curve: List[Tuple[str, float]] = []
         holdings: Dict[str, Position] = {}
         currency_map: Dict[str, str] = {}
@@ -64,11 +67,12 @@ class Backtester:
         transactions = 0
 
         spy_dates = [bar.date for bar in spy_prices]
-        capital_pln = 100000.0
+        capital_pln = self.config.initial_capital
         prev_value = capital_pln
 
         for date in spy_dates:
             regime = regime_map.get(date)
+            capital_pln += self.config.contributions.get(date, 0.0)
             if regime == "bull":
                 bull_days += 1
             elif regime == "bear":
@@ -90,7 +94,7 @@ class Backtester:
                 picks,
                 top100,
                 spy_regime=regime or "bear",
-                price_map={s: (price_history.get(s, [{}])[-1].close if price_history.get(s) else 0) for s in top100},
+                price_map={s: self._get_price(price_lookup, price_history, s, date) for s in top100},
                 sma_map=sma_cache,
                 portfolio=holdings,
             )
@@ -98,7 +102,7 @@ class Backtester:
 
             # Simplified fill: adjust positions by target weight using available capital
             for order in orders:
-                price = order.price or price_history.get(order.symbol, [{}])[-1].close if price_history.get(order.symbol) else 0
+                price = order.price or self._get_price(price_lookup, price_history, order.symbol, date)
                 if price == 0:
                     continue
                 if order.action == "SELL":
@@ -113,9 +117,9 @@ class Backtester:
 
             portfolio_value = capital_pln
             for symbol, pos in holdings.items():
-                latest_price = price_history.get(symbol, [])
-                if latest_price:
-                    portfolio_value += pos.quantity * latest_price[-1].close
+                day_price = self._get_price(price_lookup, price_history, symbol, date)
+                if day_price:
+                    portfolio_value += pos.quantity * day_price
             portfolio_pln = self.currency.portfolio_to_pln({s: portfolio_value for s in ["portfolio"]}, fx_history, date, {"portfolio": "PLN"})
             equity_curve.append((date, portfolio_pln))
             if prev_value > 0:
@@ -170,6 +174,20 @@ class Backtester:
     def _avg_holding_days(self, holdings: Dict[str, Position]) -> float:
         # Placeholder: without transaction history we assume weekly rebalancing
         return 5.0
+
+    def _get_price(
+        self,
+        price_lookup: Dict[str, Dict[str, float]],
+        price_history: Dict[str, List[PriceBar]],
+        symbol: str,
+        date: str,
+    ) -> float:
+        """Return the daily close if available, otherwise fall back to the latest known price."""
+        price = price_lookup.get(symbol, {}).get(date)
+        if price is not None:
+            return price
+        history = price_history.get(symbol, [])
+        return history[-1].close if history else 0
 
 
 __all__ = ["Backtester", "BacktestReport"]
