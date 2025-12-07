@@ -94,7 +94,11 @@ class Backtester:
                 picks,
                 top100,
                 spy_regime=regime or "bear",
-                price_map={s: price_lookup.get(s, {}).get(date) for s in top100},
+                price_map={
+                    s: price_lookup.get(s, {}).get(date)
+                    or (price_history.get(s, [{}])[-1].close if price_history.get(s) else None)
+                    for s in top100
+                },
                 sma_map=sma_cache,
                 portfolio=holdings,
             )
@@ -103,6 +107,9 @@ class Backtester:
             # Simplified fill: adjust positions by target weight using available capital
             for order in orders:
                 price = order.price or price_lookup.get(order.symbol, {}).get(date)
+                if price is None:
+                    history = price_history.get(order.symbol)
+                    price = history[-1].close if history else 0
                 if price == 0:
                     continue
                 if order.action == "SELL":
@@ -118,6 +125,9 @@ class Backtester:
             portfolio_value = capital_pln
             for symbol, pos in holdings.items():
                 day_price = price_lookup.get(symbol, {}).get(date)
+                if day_price is None:
+                    prices = price_history.get(symbol, [])
+                    day_price = prices[-1].close if prices else None
                 if day_price:
                     portfolio_value += pos.quantity * day_price
             portfolio_pln = self.currency.portfolio_to_pln({s: portfolio_value for s in ["portfolio"]}, fx_history, date, {"portfolio": "PLN"})
