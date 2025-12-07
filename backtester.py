@@ -116,7 +116,12 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
     equity_df = pd.DataFrame(report.equity_curve, columns=["date", "equity_pln"])
     equity_df.to_csv("reports/equity_curve.csv", index=False)
 
+    # Persist and display the analyzed period for visibility in CI logs and artifacts
+    summary_path = Path("reports/backtest_summary.txt")
+    summary_path.write_text(f"Analyzed period: {start_date} → {end_date}\n")
+
     print("Backtest complete")
+    print(f"Analyzed period: {start_date} → {end_date}")
     print(f"CAGR: {report.cagr:.2%}")
     print(f"Max Drawdown: {report.max_drawdown:.2%}")
     print(f"Sharpe: {report.sharpe:.2f}")
