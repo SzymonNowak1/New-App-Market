@@ -52,13 +52,9 @@ class Backtester:
         fx_history: Dict[str, List[PriceBar]],
     ) -> BacktestReport:
         regime_map = self.execution.bull_bear(spy_prices)
-        lookback = getattr(
-            self.portfolio_manager.rebalance_cfg,
-            "sma_lookback",
-            self.execution.cfg.sma_lookback,
-        )
         sma_cache: Dict[str, Dict[str, float]] = {
-            symbol: sma(prices, lookback) for symbol, prices in price_history.items()
+            symbol: sma(prices, self.portfolio_manager.rebalance_cfg.sma_lookback)
+            for symbol, prices in price_history.items()
         }
         price_lookup: Dict[str, Dict[str, float]] = {
             symbol: {bar.date: bar.close for bar in prices} for symbol, prices in price_history.items()
