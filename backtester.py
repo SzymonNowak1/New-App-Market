@@ -29,6 +29,7 @@ def _price_series(symbol: str, start_date: str, end_date: str) -> List[PriceBar]
     else:
         prices = df["Close"]
     return [PriceBar(pd.to_datetime(date).strftime("%Y-%m-%d"), float(price)) for date, price in prices.items()]
+    return [PriceBar(date.strftime("%Y-%m-%d"), float(price)) for date, price in prices.items()]
 
 
 def _fundamentals(symbols: List[str], start_year: int, end_year: int) -> Dict[str, List[FundamentalSnapshot]]:
