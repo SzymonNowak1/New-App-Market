@@ -37,6 +37,7 @@ class FundamentalScorer:
                     total=total,
                     sector=snap.sector,
                     market_cap=snap.market_cap,
+                    period=snap.period,
                 )
             )
         return scored

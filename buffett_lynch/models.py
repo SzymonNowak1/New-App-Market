@@ -27,6 +27,7 @@ class ScoredCompany:
     total: float
     sector: str
     market_cap: float
+    period: str = ""
 
 
 @dataclass
@@ -36,6 +37,7 @@ class Position:
     currency: str
     weight: float
     cost_basis: float
+    entry_date: str = ""
 
 
 @dataclass

@@ -62,7 +62,9 @@ class PortfolioManager:
             if price is None or price == 0:
                 continue
             target_value = alloc.weight
-            current_value = current.get(alloc.symbol, Position(alloc.symbol, 0.0, currency, 0.0, 0.0))
+            current_value = current.get(
+                alloc.symbol, Position(alloc.symbol, 0.0, currency, 0.0, 0.0, "")
+            )
             delta_value = target_value - current_value.weight
             if abs(delta_value) < 1e-6:
                 continue

@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 @dataclass
 class RebalancingConfig:
-    frequency: str = "weekly"
+    frequency: str = "quarterly"
     min_position: float = 0.02
     max_position: float = 0.25
     max_sector_weight: float = 0.30

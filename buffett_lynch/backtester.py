@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
@@ -67,12 +68,14 @@ class Backtester:
         price_lookup: Dict[str, Dict[str, float]] = {
             symbol: {bar.date: bar.close for bar in prices} for symbol, prices in price_history.items()
         }
+        rebalance_dates = self._quarter_starts([bar.date for bar in spy_prices])
         equity_curve: List[Tuple[str, float]] = []
         holdings: Dict[str, Position] = {}
         currency_map: Dict[str, str] = {}
         daily_returns: List[float] = []
         bull_days = bear_days = 0
         transactions = 0
+        current_scores: List[ScoredCompany] = []
 
         spy_dates = [bar.date for bar in spy_prices]
         capital_pln = self.config.initial_capital
@@ -88,15 +91,10 @@ class Backtester:
 
             year = date[:4]
             top100 = top100_by_year.get(year, [])
-            scored_today: List[ScoredCompany] = []
-            for symbol, scored_list in fundamentals.items():
-                for score in scored_list:
-                    if score.market_cap and score.total is not None:
-                        if score.symbol == symbol and score.market_cap and score.total and score.sector:
-                            if score.total >= 0 and score.total is not None and score.market_cap is not None:
-                                if score.symbol not in [s.symbol for s in scored_today]:
-                                    scored_today.append(score)
-            picks = self.portfolio_manager.pick_top(scored_today)
+            if date in rebalance_dates or not current_scores:
+                current_scores = self._scores_for_year(fundamentals, year)
+            picks = self.portfolio_manager.pick_top(current_scores)
+            rebalance_due = date in rebalance_dates
             orders = self.execution.generate_orders(
                 date,
                 picks,
@@ -105,6 +103,7 @@ class Backtester:
                 price_map={s: self._get_price(price_lookup, price_history, s, date) for s in top100},
                 sma_map=sma_cache,
                 portfolio=holdings,
+                rebalance_due=rebalance_due,
             )
             transactions += len(orders)
 
@@ -114,12 +113,21 @@ class Backtester:
                 if price == 0:
                     continue
                 if order.action == "SELL":
+                    if not self._allow_sell(order, holdings, date):
+                        continue
                     if order.symbol in holdings:
                         capital_pln += holdings[order.symbol].quantity * price
                         del holdings[order.symbol]
                 else:
                     quantity = (capital_pln * self.portfolio_manager.rebalance_cfg.max_position) / price
-                    holdings[order.symbol] = Position(order.symbol, quantity, order.currency, self.portfolio_manager.rebalance_cfg.max_position, price)
+                    holdings[order.symbol] = Position(
+                        order.symbol,
+                        quantity,
+                        order.currency,
+                        self.portfolio_manager.rebalance_cfg.max_position,
+                        price,
+                        date,
+                    )
                     capital_pln -= quantity * price
                     currency_map[order.symbol] = order.currency
 
@@ -182,6 +190,41 @@ class Backtester:
     def _avg_holding_days(self, holdings: Dict[str, Position]) -> float:
         # Placeholder: without transaction history we assume weekly rebalancing
         return 5.0
+
+    def _scores_for_year(self, fundamentals: Dict[str, List[ScoredCompany]], year: str) -> List[ScoredCompany]:
+        """Return the most recent scores up to the requested year for each symbol."""
+        year_int = int(year)
+        scores: List[ScoredCompany] = []
+        for symbol, entries in fundamentals.items():
+            eligible = [s for s in entries if s.market_cap > 0 and int(s.period) <= year_int]
+            if not eligible:
+                continue
+            latest = sorted(eligible, key=lambda s: int(s.period), reverse=True)[0]
+            scores.append(latest)
+        return scores
+
+    def _quarter_starts(self, dates: List[str]) -> List[str]:
+        seen = set()
+        starts: List[str] = []
+        for date in sorted(dates):
+            dt = datetime.fromisoformat(date)
+            quarter = (dt.month - 1) // 3
+            key = (dt.year, quarter)
+            if key not in seen:
+                seen.add(key)
+                starts.append(date)
+        return starts
+
+    def _allow_sell(self, order: Order, holdings: Dict[str, Position], date: str) -> bool:
+        """Enforce a 90-day minimum holding period for non-fundamental exits."""
+        fundamental_reasons = {"Bear regime", "Lost TOP100", "ValueScore guardrail", "Below TOP40 buffer"}
+        if order.reason in fundamental_reasons:
+            return True
+        pos = holdings.get(order.symbol)
+        if not pos or not pos.entry_date:
+            return True
+        held_days = (datetime.fromisoformat(date) - datetime.fromisoformat(pos.entry_date)).days
+        return held_days >= 90
 
     def _get_price(
         self,
