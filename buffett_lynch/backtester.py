@@ -93,7 +93,7 @@ class Backtester:
             top100 = top100_by_year.get(year, [])
             if date in rebalance_dates or not current_scores:
                 current_scores = self._scores_for_year(fundamentals, year)
-            picks = self.portfolio_manager.pick_top(current_scores)
+            picks = sorted(current_scores, key=lambda s: s.total, reverse=True)
             rebalance_due = date in rebalance_dates
             orders = self.execution.generate_orders(
                 date,
