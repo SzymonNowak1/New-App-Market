@@ -18,6 +18,8 @@ class PortfolioConfig:
     top_n: int = 15
     min_value_score: float = 40.0
     sma_lookback: int = 200
+    # Buffer holdings up to 3×N to cut churn between rebalances
+    hold_multiplier: int = 3
     bear_etfs: Dict[str, str] = field(default_factory=lambda: {"EUR": "ZPR1.DE", "USD": "SHV"})
 
 

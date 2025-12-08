@@ -48,3 +48,45 @@ class FundamentalScorer:
 
 __all__ = ["FundamentalScorer", "ScoringRules"]
 
+
+def growth_score(snapshot: FundamentalSnapshot) -> float:
+    """Compute GrowthScore with a penalty for volatile revenue growth.
+
+    Stable revenue growth is rewarded more than erratic surges. The penalty is
+    expected to be a pre-computed percentile that scales with revenue
+    variability; higher variability reduces the resulting GrowthScore.
+    """
+
+    growth_pct = snapshot.metrics.get("growth", 0.0)
+    volatility_penalty = snapshot.metrics.get("revenue_volatility_penalty", 0.0)
+
+    return max(0.0, growth_pct - volatility_penalty)
+
+
+def quality_score(snapshot: FundamentalSnapshot) -> float:
+    """Compute QualityScore with a 5Y ROIC trend uplift.
+
+    The ROIC trend percentile rewards companies whose operational efficiency is
+    improving over the last five years instead of only looking at the current
+    ROIC level.
+    """
+
+    roe_pct = snapshot.metrics.get("roe", 0.0)
+    roic_trend_pct = snapshot.metrics.get("roic_trend_pct", 0.0)
+
+    # Keep the ROE-driven profile while explicitly rewarding a rising ROIC trend.
+    return 0.9 * roe_pct + 0.1 * roic_trend_pct
+
+
+def moat_score(snapshot: FundamentalSnapshot) -> float:
+    """Compute MoatScore from pricing power, reinvestment, and ROIC trend percentiles."""
+
+    gross_margin_pct = snapshot.metrics.get("gross_margin_pct", 0.0)
+    rd_sales_pct = snapshot.metrics.get("rd_sales_pct", 0.0)
+    roic_trend_pct = snapshot.metrics.get("roic_trend_pct", 0.0)
+
+    return 0.4 * gross_margin_pct + 0.3 * rd_sales_pct + 0.3 * roic_trend_pct
+
+
+__all__.extend(["growth_score", "moat_score", "quality_score"])
+

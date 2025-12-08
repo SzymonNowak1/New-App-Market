@@ -14,7 +14,13 @@ from buffett_lynch.config import BacktestConfig, StrategyConfig
 from buffett_lynch.currency_engine import CurrencyEngine
 from buffett_lynch.data_loader import DataLoader, InMemorySource
 from buffett_lynch.execution_engine import ExecutionEngine
-from buffett_lynch.fundamental_scoring import FundamentalScorer, ScoringRules
+from buffett_lynch.fundamental_scoring import (
+    FundamentalScorer,
+    ScoringRules,
+    growth_score,
+    moat_score,
+    quality_score,
+)
 from buffett_lynch.models import FundamentalSnapshot, PriceBar
 from buffett_lynch.portfolio_manager import PortfolioManager
 from buffett_lynch.universe_builder import UniverseBuilder
@@ -79,11 +85,6 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
     tickers = ["AAPL", "MSFT", "GOOGL"]
     spy_symbol = "SPY"
 
-    price_history: Dict[str, List[PriceBar]] = {
-        symbol: _price_series(symbol, start_date, end_date) for symbol in tickers + [spy_symbol]
-    }
-    spy_prices = price_history.pop(spy_symbol)
-
     start_year = datetime.fromisoformat(start_date).year
     end_year = datetime.fromisoformat(end_date).year
     fundamentals_raw = _fundamentals(tickers, start_year, end_year)
@@ -98,14 +99,10 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
     }
 
     rules = ScoringRules(
-        quality=lambda snap: 0.9 * snap.metrics.get("roe", 0) + 0.1 * snap.metrics.get("roic_trend_pct", 0),
+        quality=quality_score,
         value=lambda snap: max(0.0, 100.0 - snap.metrics.get("pe", 0)),
-        growth=lambda snap: max(
-            0.0, snap.metrics.get("growth", 0) - snap.metrics.get("revenue_volatility_penalty", 0)
-        ),
-        moat=lambda snap: 0.4 * snap.metrics.get("gross_margin_pct", 0)
-        + 0.3 * snap.metrics.get("rd_sales_pct", 0)
-        + 0.3 * snap.metrics.get("roic_trend_pct", 0),
+        growth=growth_score,
+        moat=moat_score,
         risk=lambda snap: max(0.0, 100.0 - snap.metrics.get("volatility", 0)),
     )
 
@@ -125,6 +122,14 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
     universe = UniverseBuilder(loader)
     portfolio_manager = PortfolioManager(strategy_cfg.portfolio, strategy_cfg.rebalancing)
     execution = ExecutionEngine(strategy_cfg.portfolio)
+    bear_symbol, bear_currency = execution.bear_asset(strategy_cfg.backtest.base_currency)
+    bear_tickers = [bear_symbol]
+
+    price_history: Dict[str, List[PriceBar]] = {
+        symbol: _price_series(symbol, start_date, end_date)
+        for symbol in tickers + bear_tickers + [spy_symbol]
+    }
+    spy_prices = price_history.pop(spy_symbol)
     currency = CurrencyEngine(strategy_cfg.backtest.base_currency)
     backtester = Backtester(universe, scorer, portfolio_manager, execution, currency, strategy_cfg.backtest)
 

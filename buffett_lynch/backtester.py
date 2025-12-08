@@ -43,6 +43,7 @@ class Backtester:
         self.execution = execution
         self.currency = currency
         self.config = config
+        self.bear_symbol, self.bear_currency = self.execution.bear_asset(self.currency.base_currency)
         # Guarantee an SMA lookback attribute on the rebalancing configuration so downstream
         # consumers never fail when older objects lack the field (e.g., during CI runs).
         if not hasattr(self.portfolio_manager.rebalance_cfg, "sma_lookback"):
@@ -95,16 +96,24 @@ class Backtester:
                 current_scores = self._scores_for_year(fundamentals, year)
             picks = sorted(current_scores, key=lambda s: s.total, reverse=True)
             rebalance_due = date in rebalance_dates
-            orders = self.execution.generate_orders(
-                date,
-                picks,
-                top100,
-                spy_regime=regime or "bear",
-                price_map={s: self._get_price(price_lookup, price_history, s, date) for s in top100},
-                sma_map=sma_cache,
-                portfolio=holdings,
-                rebalance_due=rebalance_due,
-            )
+            orders = []
+
+            # Portfolio changes are constrained to the scoring/rebalance schedule.
+            if rebalance_due:
+                orders = self.execution.generate_orders(
+                    date,
+                    picks,
+                    top100,
+                    spy_regime=regime or "bear",
+                    price_map={
+                        s: self._get_price(price_lookup, price_history, s, date)
+                        for s in top100 + [self.bear_symbol]
+                    },
+                    sma_map=sma_cache,
+                    portfolio=holdings,
+                    bear_asset=(self.bear_symbol, self.bear_currency),
+                    rebalance_due=rebalance_due,
+                )
             transactions += len(orders)
 
             # Simplified fill: adjust positions by target weight using available capital
@@ -119,7 +128,10 @@ class Backtester:
                         capital_pln += holdings[order.symbol].quantity * price
                         del holdings[order.symbol]
                 else:
-                    quantity = (capital_pln * self.portfolio_manager.rebalance_cfg.max_position) / price
+                    if order.reason.startswith("Bear regime"):
+                        quantity = capital_pln / price
+                    else:
+                        quantity = (capital_pln * self.portfolio_manager.rebalance_cfg.max_position) / price
                     holdings[order.symbol] = Position(
                         order.symbol,
                         quantity,
