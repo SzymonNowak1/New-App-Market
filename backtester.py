@@ -49,19 +49,13 @@ def _price_series(symbol: str, start_date: str, end_date: str) -> List[PriceBar]
 
 
 def _fundamentals(symbols: List[str], start_year: int, end_year: int) -> Dict[str, List[FundamentalSnapshot]]:
-    """Synthesize fundamental snapshots with moat-ready percentile inputs.
+    """Synthesize fundamental snapshots with moat-ready raw inputs.
 
     The Yahoo Finance metadata can be sparse; we synthesize deterministic values
     with a small symbol-specific jitter to avoid identical scores. Percentiles
-    are computed across the entire universe per year with median fallbacks when
-    data is missing.
+    are computed later by the data loading layer so this helper only provides
+    the raw inputs (gross margin %, R&D/Sales %, ROIC trend proxy, etc.).
     """
-
-    def _percentile_rank(value: float, peers: List[float]) -> float:
-        if not peers:
-            return 50.0
-        arr = np.array(peers, dtype=float)
-        return float((arr <= value).sum()) / len(arr) * 100.0
 
     def _with_jitter(base: float, symbol: str, scale: float = 0.02) -> float:
         """Deterministically vary fallback values so percentiles are meaningful."""
@@ -114,43 +108,15 @@ def _fundamentals(symbols: List[str], start_year: int, end_year: int) -> Dict[st
         }
         meta[symbol] = {"market_cap": market_cap, "sector": sector}
 
-    def _median(values: List[float]) -> float:
-        clean = [v for v in values if v is not None]
-        return float(np.median(clean)) if clean else 50.0
-
-    gm_values = [metrics.get("gross_margin_pct") for metrics in raw_metrics.values()]
-    rd_values = [metrics.get("rd_sales_pct") for metrics in raw_metrics.values()]
-    roic_values = [metrics.get("roic_trend_pct") for metrics in raw_metrics.values()]
-
-    gm_median = _median(gm_values)
-    rd_median = _median(rd_values)
-    roic_median = _median(roic_values)
-
-    gm_peers = [v if v is not None else gm_median for v in gm_values]
-    rd_peers = [v if v is not None else rd_median for v in rd_values]
-    roic_peers = [v if v is not None else roic_median for v in roic_values]
-
     fundamentals: Dict[str, List[FundamentalSnapshot]] = {}
     for symbol, metrics in raw_metrics.items():
-        gm_value = metrics.get("gross_margin_pct") if metrics.get("gross_margin_pct") is not None else gm_median
-        rd_value = metrics.get("rd_sales_pct") if metrics.get("rd_sales_pct") is not None else rd_median
-        roic_value = metrics.get("roic_trend_pct") if metrics.get("roic_trend_pct") is not None else roic_median
-
-        moat_metrics = {
-            "gross_margin_percentile": _percentile_rank(gm_value, gm_peers),
-            "r_and_d_to_sales_percentile": _percentile_rank(rd_value, rd_peers),
-            "roic_trend_percentile": _percentile_rank(roic_value, roic_peers),
-        }
-
-        metrics_with_percentiles = {**metrics, **moat_metrics}
-
         for year in range(start_year, end_year + 1):
             fundamentals.setdefault(symbol, []).append(
                 FundamentalSnapshot(
                     period=str(year),
                     market_cap=meta[symbol]["market_cap"],
                     sector=meta[symbol]["sector"],
-                    metrics=metrics_with_percentiles,
+                    metrics=metrics,
                 )
             )
     return fundamentals
@@ -204,7 +170,10 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
     source = InMemorySource(price_history, fundamentals_raw, membership, fx_history)
     loader = DataLoader(source, source, source, source)
     scorer = FundamentalScorer(rules)
-    scored_fundamentals = {symbol: scorer.score(symbol, snaps) for symbol, snaps in fundamentals_raw.items()}
+    scored_fundamentals = {
+        symbol: scorer.score(symbol, loader.load_fundamentals(symbol))
+        for symbol in fundamentals_raw.keys()
+    }
 
     universe = UniverseBuilder(loader)
     portfolio_manager = PortfolioManager(strategy_cfg.portfolio, strategy_cfg.rebalancing)

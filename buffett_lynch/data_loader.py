@@ -1,9 +1,10 @@
 """Data access layer for prices, fundamentals, index membership, and FX."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Protocol
+from dataclasses import dataclass, field
+from typing import Dict, Iterable, List, Optional, Protocol
 
+from .fundamental_metrics import FundamentalMetrics
 from .models import FundamentalSnapshot, PriceBar
 
 
@@ -34,12 +35,33 @@ class DataLoader:
     fundamentals_source: FundamentalsDataSource
     membership_source: IndexMembershipSource
     fx_source: FXRateSource
+    _enriched_fundamentals: Optional[Dict[str, List[FundamentalSnapshot]]] = field(
+        default=None, init=False, repr=False
+    )
 
     def load_price_history(self, symbol: str) -> List[PriceBar]:
         return sorted(self.price_source.price_history(symbol), key=lambda b: b.date)
 
     def load_fundamentals(self, symbol: str) -> List[FundamentalSnapshot]:
-        return sorted(self.fundamentals_source.fundamentals(symbol), key=lambda f: f.period)
+        if self._enriched_fundamentals is None:
+            all_fundamentals = None
+            if hasattr(self.fundamentals_source, "all_fundamentals"):
+                all_fundamentals = self.fundamentals_source.all_fundamentals()
+
+            if all_fundamentals is not None:
+                self._enriched_fundamentals = FundamentalMetrics().enrich_moat_percentiles(
+                    all_fundamentals
+                )
+
+        if self._enriched_fundamentals is not None:
+            snaps = self._enriched_fundamentals.get(symbol, [])
+            if snaps:
+                return sorted(snaps, key=lambda f: f.period)
+
+        raw = self.fundamentals_source.fundamentals(symbol)
+        enriched_single = FundamentalMetrics().enrich_moat_percentiles({symbol: raw})
+        snaps = enriched_single.get(symbol, raw)
+        return sorted(snaps, key=lambda f: f.period)
 
     def load_index_members(self, index: str) -> Dict[str, List[str]]:
         return self.membership_source.members(index)
@@ -63,6 +85,9 @@ class InMemorySource(PriceDataSource, FundamentalsDataSource, IndexMembershipSou
 
     def fundamentals(self, symbol: str) -> List[FundamentalSnapshot]:
         return self._fundamentals.get(symbol, [])
+
+    def all_fundamentals(self) -> Dict[str, List[FundamentalSnapshot]]:
+        return self._fundamentals
 
     def members(self, index: str) -> Dict[str, List[str]]:
         return self._membership.get(index, {})

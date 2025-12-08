@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import backtester as runner
+from buffett_lynch.data_loader import DataLoader, InMemorySource
 
 
 class _StubTicker:
@@ -55,13 +56,16 @@ def test_moat_percentiles_populated(monkeypatch):
 
     monkeypatch.setattr(runner, "yf", _stub_yf(fundamentals_data))
 
-    fundamentals = runner._fundamentals(list(fundamentals_data.keys()), 2020, 2020)
+    raw_fundamentals = runner._fundamentals(list(fundamentals_data.keys()), 2020, 2020)
+    source = InMemorySource({}, raw_fundamentals, {}, {})
+    loader = DataLoader(source, source, source, source)
 
     moat_components = {"gross_margin_percentile", "r_and_d_to_sales_percentile", "roic_trend_percentile"}
 
     percentiles = {metric: [] for metric in moat_components}
 
-    for symbol, snapshots in fundamentals.items():
+    for symbol in fundamentals_data.keys():
+        snapshots = loader.load_fundamentals(symbol)
         snap = snapshots[0]
         for metric in moat_components:
             assert metric in snap.metrics
