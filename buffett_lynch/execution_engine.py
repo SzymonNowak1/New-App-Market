@@ -56,6 +56,8 @@ class ExecutionEngine:
         rebalance_due: bool = True,
     ) -> List[Order]:
         orders: List[Order] = []
+        if not rebalance_due:
+            return orders
         bear_symbol, bear_currency = bear_asset or self.bear_asset()
         if spy_regime == "bear":
             for pos in portfolio.values():

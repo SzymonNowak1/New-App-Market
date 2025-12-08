@@ -69,7 +69,8 @@ class Backtester:
         price_lookup: Dict[str, Dict[str, float]] = {
             symbol: {bar.date: bar.close for bar in prices} for symbol, prices in price_history.items()
         }
-        rebalance_dates = self._quarter_starts([bar.date for bar in spy_prices])
+        rebalance_dates = self._rebalance_schedule([bar.date for bar in spy_prices])
+        rebalance_set = set(rebalance_dates)
         equity_curve: List[Tuple[str, float]] = []
         holdings: Dict[str, Position] = {}
         currency_map: Dict[str, str] = {}
@@ -92,10 +93,10 @@ class Backtester:
 
             year = date[:4]
             top100 = top100_by_year.get(year, [])
-            if date in rebalance_dates or not current_scores:
+            if date in rebalance_set or not current_scores:
                 current_scores = self._scores_for_year(fundamentals, year)
             picks = sorted(current_scores, key=lambda s: s.total, reverse=True)
-            rebalance_due = date in rebalance_dates
+            rebalance_due = date in rebalance_set
             orders = []
 
             # Portfolio changes are constrained to the scoring/rebalance schedule.
@@ -215,7 +216,10 @@ class Backtester:
             scores.append(latest)
         return scores
 
-    def _quarter_starts(self, dates: List[str]) -> List[str]:
+    def _rebalance_schedule(self, dates: List[str]) -> List[str]:
+        """Return the allowed rebalance dates. Only quarterly is supported by policy."""
+        if self.portfolio_manager.rebalance_cfg.frequency != "quarterly":
+            raise ValueError("Only quarterly rebalancing is permitted by the strategy policy")
         seen = set()
         starts: List[str] = []
         for date in sorted(dates):
