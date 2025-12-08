@@ -91,8 +91,25 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
 
     membership = {"SP500": {str(year): tickers for year in range(start_year, end_year + 1)}}
 
-    # Flat FX history so portfolio conversion always succeeds
+    strategy_cfg = StrategyConfig(
+        backtest=BacktestConfig(
+            start_date=start_date,
+            end_date=end_date,
+            base_currency=base_currency,
+            initial_capital=initial_capital,
+        )
+    )
+    execution = ExecutionEngine(strategy_cfg.portfolio)
+    bear_symbol, bear_currency = execution.bear_asset(strategy_cfg.backtest.base_currency)
+    bear_tickers = [bear_symbol]
+
+    price_history: Dict[str, List[PriceBar]] = {
+        symbol: _price_series(symbol, start_date, end_date)
+        for symbol in tickers + bear_tickers + [spy_symbol]
+    }
+    spy_prices = price_history.pop(spy_symbol)
     dates = [bar.date for bar in spy_prices]
+    # Flat FX history so portfolio conversion always succeeds
     fx_history = {
         f"USD{base_currency}": [PriceBar(date, 4.0) for date in dates],
         f"EUR{base_currency}": [PriceBar(date, 4.3) for date in dates],
@@ -111,25 +128,8 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
     scorer = FundamentalScorer(rules)
     scored_fundamentals = {symbol: scorer.score(symbol, snaps) for symbol, snaps in fundamentals_raw.items()}
 
-    strategy_cfg = StrategyConfig(
-        backtest=BacktestConfig(
-            start_date=start_date,
-            end_date=end_date,
-            base_currency=base_currency,
-            initial_capital=initial_capital,
-        )
-    )
     universe = UniverseBuilder(loader)
     portfolio_manager = PortfolioManager(strategy_cfg.portfolio, strategy_cfg.rebalancing)
-    execution = ExecutionEngine(strategy_cfg.portfolio)
-    bear_symbol, bear_currency = execution.bear_asset(strategy_cfg.backtest.base_currency)
-    bear_tickers = [bear_symbol]
-
-    price_history: Dict[str, List[PriceBar]] = {
-        symbol: _price_series(symbol, start_date, end_date)
-        for symbol in tickers + bear_tickers + [spy_symbol]
-    }
-    spy_prices = price_history.pop(spy_symbol)
     currency = CurrencyEngine(strategy_cfg.backtest.base_currency)
     backtester = Backtester(universe, scorer, portfolio_manager, execution, currency, strategy_cfg.backtest)
 
