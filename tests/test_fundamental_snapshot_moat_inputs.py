@@ -65,6 +65,11 @@ def test_moat_percentiles_populated(monkeypatch):
     percentiles = {metric: [] for metric in moat_components}
 
     for symbol in fundamentals_data.keys():
+        raw_snap = raw_fundamentals[symbol][0]
+        for metric in moat_components:
+            assert metric in raw_snap.metrics
+            percentiles[metric].append(raw_snap.metrics[metric])
+
         snapshots = loader.load_fundamentals(symbol)
         snap = snapshots[0]
         for metric in moat_components:

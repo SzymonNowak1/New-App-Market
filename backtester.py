@@ -108,15 +108,65 @@ def _fundamentals(symbols: List[str], start_year: int, end_year: int) -> Dict[st
         }
         meta[symbol] = {"market_cap": market_cap, "sector": sector}
 
+    moat_percentile_sources = {
+        "gross_margin_percentile": "gross_margin_pct",
+        "r_and_d_to_sales_percentile": "rd_sales_pct",
+        "roic_trend_percentile": "roic_trend_pct",
+    }
+
+    def _percentile_rank(value: float, peers: List[float]) -> float:
+        if not peers:
+            return 0.0
+        arr = np.array(peers, dtype=float)
+        return float((arr <= value).sum()) / len(arr) * 100.0
+
+    def _median(values: List[float]) -> float:
+        clean = [v for v in values if v is not None]
+        return float(np.median(clean)) if clean else 0.0
+
+    per_year_values: Dict[str, Dict[str, List[float]]] = {
+        str(year): {source: [] for source in moat_percentile_sources.values()}
+        for year in range(start_year, end_year + 1)
+    }
+
+    for metrics in raw_metrics.values():
+        for source_key in moat_percentile_sources.values():
+            value = metrics.get(source_key)
+            for year in per_year_values.keys():
+                if value is not None:
+                    per_year_values[year][source_key].append(value)
+
+    medians: Dict[str, Dict[str, float]] = {}
+    for year, metrics in per_year_values.items():
+        medians[year] = {source_key: _median(values) for source_key, values in metrics.items()}
+
+    peers: Dict[str, Dict[str, List[float]]] = {
+        year: {source_key: [] for source_key in moat_percentile_sources.values()}
+        for year in per_year_values.keys()
+    }
+
+    for metrics in raw_metrics.values():
+        for year in peers.keys():
+            for source_key in moat_percentile_sources.values():
+                fallback = medians[year][source_key]
+                value = metrics.get(source_key, fallback)
+                peers[year][source_key].append(value if value is not None else fallback)
+
     fundamentals: Dict[str, List[FundamentalSnapshot]] = {}
     for symbol, metrics in raw_metrics.items():
         for year in range(start_year, end_year + 1):
+            metrics_with_moat = dict(metrics)
+            for output_key, source_key in moat_percentile_sources.items():
+                fallback = medians[str(year)][source_key]
+                value = metrics_with_moat.get(source_key, fallback)
+                percentile = _percentile_rank(value if value is not None else fallback, peers[str(year)][source_key])
+                metrics_with_moat[output_key] = percentile
             fundamentals.setdefault(symbol, []).append(
                 FundamentalSnapshot(
                     period=str(year),
                     market_cap=meta[symbol]["market_cap"],
                     sector=meta[symbol]["sector"],
-                    metrics=metrics,
+                    metrics=metrics_with_moat,
                 )
             )
     return fundamentals
