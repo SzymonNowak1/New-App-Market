@@ -1,6 +1,7 @@
 """Convenience runner for the Buffett/Lynch 2.0 backtest using Yahoo Finance data."""
 from __future__ import annotations
 
+import os
 from datetime import datetime
 import hashlib
 from pathlib import Path
@@ -15,6 +16,7 @@ from buffett_lynch.config import BacktestConfig, StrategyConfig
 from buffett_lynch.currency_engine import CurrencyEngine
 from buffett_lynch.data_loader import DataLoader, InMemorySource
 from buffett_lynch.execution_engine import ExecutionEngine
+from buffett_lynch.finnhub_fundamentals import FinnhubFundamentalsSource
 from buffett_lynch.fundamental_scoring import (
     FundamentalScorer,
     ScoringRules,
@@ -134,10 +136,17 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
 
     tickers = ["AAPL", "MSFT", "GOOGL"]
     spy_symbol = "SPY"
+    finnhub_key = os.environ.get("FINNHUB_API_KEY")
 
     start_year = datetime.fromisoformat(start_date).year
     end_year = datetime.fromisoformat(end_date).year
-    fundamentals_raw = _fundamentals(tickers, start_year, end_year)
+    fundamentals_raw: Dict[str, List[FundamentalSnapshot]]
+    fundamentals_source = None
+    if finnhub_key:
+        fundamentals_source = FinnhubFundamentalsSource(finnhub_key, symbols=tickers)
+        fundamentals_raw = fundamentals_source.all_fundamentals()
+    else:
+        fundamentals_raw = _fundamentals(tickers, start_year, end_year)
 
     membership = {"SP500": {str(year): tickers for year in range(start_year, end_year + 1)}}
 
@@ -173,8 +182,13 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, base_cu
         risk=lambda snap: max(0.0, 100.0 - snap.metrics.get("volatility", 0)),
     )
 
-    source = InMemorySource(price_history, fundamentals_raw, membership, fx_history)
-    loader = DataLoader(source, source, source, source)
+    misc_source = InMemorySource(price_history, {}, membership, fx_history)
+    loader = DataLoader(
+        price_source=misc_source,
+        fundamentals_source=fundamentals_source or InMemorySource({}, fundamentals_raw, {}, {}),
+        membership_source=misc_source,
+        fx_source=misc_source,
+    )
     scorer = FundamentalScorer(rules)
     scored_fundamentals = {
         symbol: scorer.score(symbol, loader.load_fundamentals(symbol))
