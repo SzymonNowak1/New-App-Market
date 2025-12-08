@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Protocol
 
 from .fundamental_metrics import FundamentalMetrics
+from .fundamental_raw_metrics import FundamentalRawMetrics
 from .models import FundamentalSnapshot, PriceBar
 
 
@@ -49,8 +50,9 @@ class DataLoader:
                 all_fundamentals = self.fundamentals_source.all_fundamentals()
 
             if all_fundamentals is not None:
+                raw_enriched = FundamentalRawMetrics().enrich_moat_raw_metrics(all_fundamentals)
                 self._enriched_fundamentals = FundamentalMetrics().enrich_moat_percentiles(
-                    all_fundamentals
+                    raw_enriched
                 )
 
         if self._enriched_fundamentals is not None:
@@ -59,7 +61,8 @@ class DataLoader:
                 return sorted(snaps, key=lambda f: f.period)
 
         raw = self.fundamentals_source.fundamentals(symbol)
-        enriched_single = FundamentalMetrics().enrich_moat_percentiles({symbol: raw})
+        raw_enriched = FundamentalRawMetrics().enrich_moat_raw_metrics({symbol: raw})
+        enriched_single = FundamentalMetrics().enrich_moat_percentiles({symbol: raw_enriched.get(symbol, raw)})
         snaps = enriched_single.get(symbol, raw)
         return sorted(snaps, key=lambda f: f.period)
 

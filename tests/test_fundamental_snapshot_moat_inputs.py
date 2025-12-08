@@ -61,14 +61,14 @@ def test_moat_percentiles_populated(monkeypatch):
     loader = DataLoader(source, source, source, source)
 
     moat_components = {"gross_margin_percentile", "r_and_d_to_sales_percentile", "roic_trend_percentile"}
+    raw_components = {"gross_margin_pct", "rd_sales_pct", "roic_trend_pct"}
 
     percentiles = {metric: [] for metric in moat_components}
 
     for symbol in fundamentals_data.keys():
         raw_snap = raw_fundamentals[symbol][0]
-        for metric in moat_components:
+        for metric in raw_components:
             assert metric in raw_snap.metrics
-            percentiles[metric].append(raw_snap.metrics[metric])
 
         snapshots = loader.load_fundamentals(symbol)
         snap = snapshots[0]

@@ -75,24 +75,26 @@ def _fundamentals(symbols: List[str], start_year: int, end_year: int) -> Dict[st
         growth = float(info.get("revenueGrowth") or 0.08) * 100
         volatility = float(info.get("beta") or 1.1) * 20
 
+        revenue = float(info.get("totalRevenue") or _with_jitter(1_000_000.0, symbol))
+
         gross_margin_pct = info.get("grossMargins")
         if gross_margin_pct is not None:
             gross_margin_pct = float(gross_margin_pct) * 100
         else:
             gross_margin_pct = _with_jitter(40.0, symbol)
+        gross_profit = revenue * gross_margin_pct / 100.0
 
         rd_expense = info.get("researchDevelopment")
-        revenue = info.get("totalRevenue")
-        if rd_expense is not None and revenue:
-            rd_sales_pct = float(rd_expense) / float(revenue) * 100
+        if rd_expense is not None:
+            rd_expense = float(rd_expense)
         else:
-            rd_sales_pct = _with_jitter(8.0, symbol)
+            rd_expense = revenue * _with_jitter(8.0, symbol) / 100.0
+        rd_sales_pct = rd_expense / revenue * 100.0 if revenue else None
 
-        roic_trend_pct = info.get("returnOnEquity")
-        if roic_trend_pct is not None:
-            roic_trend_pct = float(roic_trend_pct) * 10
-        else:
-            roic_trend_pct = _with_jitter(10.0, symbol)
+        roic_base = roe
+        slope = _with_jitter(0.5, symbol, scale=0.1)
+        roic_history = [roic_base + slope * i for i in range(5)]
+        roic_trend_pct = slope
 
         revenue_volatility_penalty = max(0.0, volatility * 0.2)
 
@@ -101,72 +103,26 @@ def _fundamentals(symbols: List[str], start_year: int, end_year: int) -> Dict[st
             "pe": pe,
             "growth": growth,
             "volatility": volatility,
+            "revenue": revenue,
+            "gross_profit": gross_profit,
+            "r_and_d_expense": rd_expense,
+            "roic_history": roic_history,
             "gross_margin_pct": gross_margin_pct,
-            "rd_sales_pct": rd_sales_pct,
+            "rd_sales_pct": rd_sales_pct if rd_sales_pct is not None else 0.0,
             "roic_trend_pct": roic_trend_pct,
             "revenue_volatility_penalty": revenue_volatility_penalty,
         }
         meta[symbol] = {"market_cap": market_cap, "sector": sector}
 
-    moat_percentile_sources = {
-        "gross_margin_percentile": "gross_margin_pct",
-        "r_and_d_to_sales_percentile": "rd_sales_pct",
-        "roic_trend_percentile": "roic_trend_pct",
-    }
-
-    def _percentile_rank(value: float, peers: List[float]) -> float:
-        if not peers:
-            return 0.0
-        arr = np.array(peers, dtype=float)
-        return float((arr <= value).sum()) / len(arr) * 100.0
-
-    def _median(values: List[float]) -> float:
-        clean = [v for v in values if v is not None]
-        return float(np.median(clean)) if clean else 0.0
-
-    per_year_values: Dict[str, Dict[str, List[float]]] = {
-        str(year): {source: [] for source in moat_percentile_sources.values()}
-        for year in range(start_year, end_year + 1)
-    }
-
-    for metrics in raw_metrics.values():
-        for source_key in moat_percentile_sources.values():
-            value = metrics.get(source_key)
-            for year in per_year_values.keys():
-                if value is not None:
-                    per_year_values[year][source_key].append(value)
-
-    medians: Dict[str, Dict[str, float]] = {}
-    for year, metrics in per_year_values.items():
-        medians[year] = {source_key: _median(values) for source_key, values in metrics.items()}
-
-    peers: Dict[str, Dict[str, List[float]]] = {
-        year: {source_key: [] for source_key in moat_percentile_sources.values()}
-        for year in per_year_values.keys()
-    }
-
-    for metrics in raw_metrics.values():
-        for year in peers.keys():
-            for source_key in moat_percentile_sources.values():
-                fallback = medians[year][source_key]
-                value = metrics.get(source_key, fallback)
-                peers[year][source_key].append(value if value is not None else fallback)
-
     fundamentals: Dict[str, List[FundamentalSnapshot]] = {}
     for symbol, metrics in raw_metrics.items():
         for year in range(start_year, end_year + 1):
-            metrics_with_moat = dict(metrics)
-            for output_key, source_key in moat_percentile_sources.items():
-                fallback = medians[str(year)][source_key]
-                value = metrics_with_moat.get(source_key, fallback)
-                percentile = _percentile_rank(value if value is not None else fallback, peers[str(year)][source_key])
-                metrics_with_moat[output_key] = percentile
             fundamentals.setdefault(symbol, []).append(
                 FundamentalSnapshot(
                     period=str(year),
                     market_cap=meta[symbol]["market_cap"],
                     sector=meta[symbol]["sector"],
-                    metrics=metrics_with_moat,
+                    metrics=dict(metrics),
                 )
             )
     return fundamentals
