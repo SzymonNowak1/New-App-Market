@@ -7,6 +7,9 @@ from typing import Callable, Dict, List
 from .models import FundamentalSnapshot, ScoredCompany
 
 
+MEDIAN_PERCENTILE = 0.5
+
+
 @dataclass
 class ScoringRules:
     quality: Callable[[FundamentalSnapshot], float]
@@ -49,6 +52,21 @@ class FundamentalScorer:
 __all__ = ["FundamentalScorer", "ScoringRules"]
 
 
+def _metric_with_median(metrics: Dict[str, float], *keys: str, default: float = MEDIAN_PERCENTILE) -> float:
+    """Return the first available metric value or a median fallback.
+
+    Percentile-based inputs should not default to 0.0 because missing data would
+    distort scoring. The median percentile (0.5) is used when a component is
+    absent or explicitly set to ``None``.
+    """
+
+    for key in keys:
+        value = metrics.get(key)
+        if value is not None:
+            return value
+    return default
+
+
 def growth_score(snapshot: FundamentalSnapshot) -> float:
     """Compute GrowthScore with a penalty for volatile revenue growth.
 
@@ -81,9 +99,15 @@ def quality_score(snapshot: FundamentalSnapshot) -> float:
 def moat_score(snapshot: FundamentalSnapshot) -> float:
     """Compute MoatScore from pricing power, reinvestment, and ROIC trend percentiles."""
 
-    gross_margin_pct = snapshot.metrics.get("gross_margin_pct", 0.0)
-    rd_sales_pct = snapshot.metrics.get("rd_sales_pct", 0.0)
-    roic_trend_pct = snapshot.metrics.get("roic_trend_pct", 0.0)
+    gross_margin_pct = _metric_with_median(
+        snapshot.metrics, "gross_margin_percentile", "gross_margin_pct"
+    )
+    rd_sales_pct = _metric_with_median(
+        snapshot.metrics, "r_and_d_to_sales_percentile", "rd_sales_pct"
+    )
+    roic_trend_pct = _metric_with_median(
+        snapshot.metrics, "roic_trend_percentile", "roic_trend_pct"
+    )
 
     return 0.4 * gross_margin_pct + 0.3 * rd_sales_pct + 0.3 * roic_trend_pct
 

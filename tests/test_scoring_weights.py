@@ -59,9 +59,9 @@ def test_moat_score_formula():
         market_cap=1_000_000_000,
         sector="Tech",
         metrics={
-            "gross_margin_pct": 75.0,
-            "rd_sales_pct": 15.0,
-            "roic_trend_pct": 55.0,
+            "gross_margin_percentile": 75.0,
+            "r_and_d_to_sales_percentile": 15.0,
+            "roic_trend_percentile": 55.0,
         },
     )
 
@@ -85,6 +85,20 @@ def test_quality_score_includes_roic_trend():
 
     # quality_score = 0.9*ROE + 0.1*ROIC_trend_pct
     assert quality_score(snap) == 0.9 * 20.0 + 0.1 * 60.0
+
+
+def test_moat_score_falls_back_to_median_when_data_missing():
+    """Missing moat components should default to median percentiles instead of zero."""
+
+    snap = FundamentalSnapshot(
+        period="2024",
+        market_cap=500_000_000,
+        sector="Consumer",
+        metrics={},
+    )
+
+    # With all components missing, the median percentile (0.5) should be applied.
+    assert moat_score(snap) == 0.5
 
 
 def test_growth_score_penalizes_revenue_volatility():
