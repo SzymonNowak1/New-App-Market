@@ -73,6 +73,7 @@ class Backtester:
         rebalance_set = set(rebalance_dates)
         equity_curve: List[Tuple[str, float]] = []
         holdings: Dict[str, Position] = {}
+        holding_periods: List[float] = []
         currency_map: Dict[str, str] = {}
         daily_returns: List[float] = []
         bull_days = bear_days = 0
@@ -128,6 +129,12 @@ class Backtester:
                     if not self._allow_sell(order, holdings, date):
                         continue
                     if order.symbol in holdings:
+                        pos = holdings[order.symbol]
+                        if pos.entry_date:
+                            held_days = (
+                                datetime.fromisoformat(date) - datetime.fromisoformat(pos.entry_date)
+                            ).days
+                            holding_periods.append(held_days)
                         capital_pln += holdings[order.symbol].quantity * price
                         del holdings[order.symbol]
                 else:
@@ -160,7 +167,7 @@ class Backtester:
         cagr = self._cagr(equity_curve)
         max_dd = self._max_drawdown(equity_curve)
         sharpe = self._sharpe(daily_returns)
-        avg_hold = self._avg_holding_days(holdings)
+        avg_hold = self._avg_holding_days(holding_periods)
         total_days = bull_days + bear_days or 1
         report = BacktestReport(
             cagr=cagr,
@@ -202,9 +209,10 @@ class Backtester:
             return 0.0
         return (mean - risk_free / 252) / std * math.sqrt(252)
 
-    def _avg_holding_days(self, holdings: Dict[str, Position]) -> float:
-        # Placeholder: without transaction history we assume weekly rebalancing
-        return 5.0
+    def _avg_holding_days(self, holding_periods: List[float]) -> float:
+        if not holding_periods:
+            return 0.0
+        return sum(holding_periods) / len(holding_periods)
 
     def _scores_for_year(self, fundamentals: Dict[str, List[ScoredCompany]], year: str) -> List[ScoredCompany]:
         """Return the most recent scores up to the requested year for each symbol."""
