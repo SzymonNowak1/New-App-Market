@@ -78,6 +78,7 @@ class Backtester:
         bull_days = bear_days = 0
         transactions = 0
         current_scores: List[ScoredCompany] = []
+        current_picks: List[ScoredCompany] = []
 
         spy_dates = [bar.date for bar in spy_prices]
         capital_pln = self.config.initial_capital
@@ -93,10 +94,11 @@ class Backtester:
 
             year = date[:4]
             top100 = top100_by_year.get(year, [])
-            if date in rebalance_set or not current_scores:
-                current_scores = self._scores_for_year(fundamentals, year)
-            picks = sorted(current_scores, key=lambda s: s.total, reverse=True)
             rebalance_due = date in rebalance_set
+            if rebalance_due:
+                current_scores = self._scores_for_year(fundamentals, year)
+                current_picks = sorted(current_scores, key=lambda s: s.total, reverse=True)
+            picks = list(current_picks)
             orders = []
 
             # Portfolio changes are constrained to the scoring/rebalance schedule.
@@ -220,16 +222,19 @@ class Backtester:
         """Return the allowed rebalance dates. Only quarterly is supported by policy."""
         if self.portfolio_manager.rebalance_cfg.frequency != "quarterly":
             raise ValueError("Only quarterly rebalancing is permitted by the strategy policy")
-        seen = set()
-        starts: List[str] = []
+        scheduled: List[str] = []
+        current_key = None
+        last_date = None
         for date in sorted(dates):
             dt = datetime.fromisoformat(date)
-            quarter = (dt.month - 1) // 3
-            key = (dt.year, quarter)
-            if key not in seen:
-                seen.add(key)
-                starts.append(date)
-        return starts
+            key = (dt.year, (dt.month - 1) // 3)
+            if key != current_key and last_date is not None:
+                scheduled.append(last_date)
+            current_key = key
+            last_date = date
+        if last_date is not None:
+            scheduled.append(last_date)
+        return scheduled
 
     def _allow_sell(self, order: Order, holdings: Dict[str, Position], date: str) -> bool:
         """Enforce a 90-day minimum holding period for non-fundamental exits."""

@@ -38,3 +38,26 @@ def test_orders_blocked_when_not_rebalance_date():
 
     assert orders == []
 
+
+def test_rebalance_schedule_picks_quarter_end_dates():
+    # Build a Backtester instance without running its full initializer.
+    from buffett_lynch.backtester import Backtester
+    from buffett_lynch.config import RebalancingConfig
+
+    bt = Backtester.__new__(Backtester)
+    bt.portfolio_manager = type("PM", (), {"rebalance_cfg": RebalancingConfig(frequency="quarterly")})()
+
+    dates = [
+        "2020-01-02",
+        "2020-03-30",
+        "2020-03-31",
+        "2020-04-01",
+        "2020-06-29",
+        "2020-06-30",
+        "2020-12-15",
+    ]
+
+    schedule = bt._rebalance_schedule(dates)
+
+    assert schedule == ["2020-03-31", "2020-06-30", "2020-12-15"]
+
