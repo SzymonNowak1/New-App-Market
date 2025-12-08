@@ -46,9 +46,10 @@ class FundamentalRawMetrics:
                 if rd_expense is not None and revenue:
                     metrics["rd_sales_pct"] = float(rd_expense) / float(revenue) * 100.0
 
-                roic_history = metrics.get("roic_history") or []
-                if roic_history:
-                    metrics["roic_trend_pct"] = _linear_trend([float(v) for v in roic_history])
+                roic_history = [float(v) for v in metrics.get("roic_history") or [] if v is not None]
+                if len(roic_history) >= 2:
+                    trend_window = roic_history[-5:]
+                    metrics["roic_trend_pct"] = _linear_trend(trend_window)
 
                 enriched_snaps.append(
                     FundamentalSnapshot(
