@@ -16,7 +16,7 @@ def build_data_sources():
 
     fundamentals_source = FinnhubFundamentalsSource(
         api_key=FINNHUB_API_KEY,
-        symbols=None  # jeśli masz własną listę — możesz podać
+        symbols=["AAPL", "MSFT", "GOOGL", "AMZN", "META"]   # przykładowe symbole
     )
 
     membership_source = DummyIndexMembershipSource(fundamentals_source)
