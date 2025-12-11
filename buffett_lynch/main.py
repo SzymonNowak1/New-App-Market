@@ -4,7 +4,7 @@ from buffett_lynch.universe_builder import UniverseBuilder
 from buffett_lynch.dummy_membership_source import DummyIndexMembershipSource
 
 
-FINNHUB_API_KEY = "TU_WSTAW_SWÓJ_KLUCZ"   # ← wstaw swój API KEY
+FINNHUB_API_KEY = "d4rjk21r01qgts2oha6gd4rjk21r01qgts2oha70"
 
 
 def build_data_sources():
