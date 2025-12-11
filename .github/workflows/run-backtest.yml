@@ -29,5 +29,3 @@ jobs:
       with:
         name: backtest_reports
         path: reports/
-env:
-  FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
