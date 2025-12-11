@@ -1,19 +1,32 @@
-from src.data_loader import DataLoader
-from src.universe_builder import UniverseBuilder
+from __future__ import annotations
+
+from .data_loader import DataLoader
+from .universe_builder import UniverseBuilder
 
 
-def main():
+def main() -> None:
     print("========== FUNDAMENTAL DEBUG DUMP ==========")
 
-    # Build loader exactly like main.py
-    from src.main import build_data_sources  # adjust if your main file differs
-    loader = build_data_sources()
+    # 🔹 importujemy to samo, co używa Twój main do zbudowania DataLoadera
+    # jeśli w main.py jest inna funkcja budująca loader, tutaj tylko zmienimy nazwę
+    try:
+        from .main import build_data_sources  # dopasujemy nazwę jeśli będzie błąd
+    except ImportError:
+        print("Nie mogę zaimportować build_data_sources z main.py")
+        print("Pokaż mi proszę zawartość src/main.py w czacie, to dopasujemy nazwę funkcji.")
+        return
 
+    loader: DataLoader = build_data_sources()
     universe_builder = UniverseBuilder(loader)
-    universe = universe_builder.build_top_market_cap("SP500")  # or your index
 
-    # We take only first 5 tickers from 2000 for inspection
+    # 🔹 bierzemy ten sam indeks, którego używa backtest – dopasuj jeśli u Ciebie jest inny
+    universe = universe_builder.build_top_market_cap("SP500")
+
     years = sorted(universe.keys())
+    if not years:
+        print("Brak danych wszechświata (universe).")
+        return
+
     first_year = years[0]
     sample_symbols = universe[first_year][:5]
 
@@ -22,9 +35,14 @@ def main():
     for symbol in sample_symbols:
         print("\n------", symbol, "------")
         fundamentals = loader.load_fundamentals(symbol)
+        if not fundamentals:
+            print("  (brak fundamentów)")
+            continue
         for snap in fundamentals:
             print(f"[{snap.period}] market_cap={snap.market_cap}")
             print("metrics:")
+            if not snap.metrics:
+                print("   (pusty metrics)")
             for k, v in snap.metrics.items():
                 print("   ", k, "=", v)
 
