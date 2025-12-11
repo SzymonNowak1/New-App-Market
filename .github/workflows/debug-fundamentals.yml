@@ -1,0 +1,23 @@
+name: Debug fundamentals
+
+on:
+  workflow_dispatch:  # ręczne odpalanie z zakładki Actions
+
+jobs:
+  debug-fundamentals:
+    runs-on: ubuntu-latest
+    env:
+      FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run debug fundamentals script
+        run: python src/debug_dump_fundamentals.py
