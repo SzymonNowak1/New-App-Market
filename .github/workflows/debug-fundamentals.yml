@@ -20,4 +20,5 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run debug fundamentals script
-        run: python -m src.debug_dump_fundamentals
+        run: python -m buffett_lynch.debug_dump_fundamentals
+
