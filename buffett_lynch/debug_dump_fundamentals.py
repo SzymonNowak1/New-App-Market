@@ -15,8 +15,7 @@ def main() -> None:
         print("Pokaż mi proszę zawartość src/main.py w czacie, to dopasujemy nazwę funkcji.")
         return
 
-    loader: DataLoader = build_data_sources()
-    universe_builder = UniverseBuilder(loader)
+    loader, universe_builder = build_data_sources()
 
     # 🔹 bierzemy ten sam indeks, którego używa backtest – dopasuj jeśli u Ciebie jest inny
     universe = universe_builder.build_top_market_cap("SP500")
