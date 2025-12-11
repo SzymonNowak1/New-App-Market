@@ -20,4 +20,4 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run debug fundamentals script
-        run: python src/debug_dump_fundamentals.py
+        run: python -m src.debug_dump_fundamentals
