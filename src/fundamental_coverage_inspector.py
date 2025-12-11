@@ -10,10 +10,6 @@ from statistics import mean
 from typing import Dict, List, Tuple
 from urllib.error import URLError
 
-from .data_loader import DataLoader
-from .universe_builder import UniverseBuilder
-from .main import build_data_sources
-
 # Ensure repository root on path for module imports
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
